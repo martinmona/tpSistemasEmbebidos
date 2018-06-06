@@ -21,18 +21,17 @@ void loop() {
 
 void procesarClaveIngresada(String clave) {
     if(clave == "1234") {
-      clave = "Clave correcta!";
+      printDisplay( "Ok!", 0, 0);
     } else {
-      clave = "Calve incorrecta";
-      printDisplay(clave, 0, 0);
-      delay(1000);
-      limpiarClaveIngresada();
+      printDisplay("Clave incorrecta", 0, 0);
     }
+    delay(1000);
+    limpiarClaveIngresada();
     procesarClave = false;
     return;
 }
-
 /******* *******/
+
 /******* Teclado *******/
 const int tecladoFilas[4] = {22, 23, 24, 25};
 const int tecladoColumnas[3] = {26, 27, 28};
@@ -102,9 +101,11 @@ void desactivarColumna(int columna) {
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7); //rs, en, d4, d5, d6, d7
 void setUpDisplay() {
   lcd.begin(16, 2); //Numero de columnas y filas
+  lcd.blink();
 }
+
 void printDisplay(String text, int atCol, int atRow){
-  lcd.setCursor(atCol, atRow);
   lcd.clear();
+  lcd.setCursor(atCol, atRow);
   lcd.print(text);
 }
