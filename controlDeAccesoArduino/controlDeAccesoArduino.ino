@@ -1,40 +1,121 @@
 
 #include <LiquidCrystal.h>
 
-boolean procesarClave = false;
+boolean modoMantenimiento = false;
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600); //Consola
+  Serial2.begin(9600);//ESP
   Serial.println("Funcionando");
+  setUpLectorTarjeta();
   setUpTeclado();
   setUpDisplay();
 }
 
 void loop() {
-  String claveIngresada = leerClave();
-  printDisplay(claveIngresada, 0, 0);
-  if(procesarClave){
-    procesarClaveIngresada(claveIngresada);
+  accesoViaTarjeta();
+  accesoViaClaveDeIngreso();
+}
+
+/******* Tarjeta *******/  
+unsigned long lastRead = 0;
+const int debounce = 500;
+String codigoLeido = "";
+
+void setUpLectorTarjeta() {
+  Serial1.begin(9600);
+}
+
+void accesoViaTarjeta() {
+  leerCodigoDeTarjeta();
+  if(codigoLeido != "") {
+    procesarRespuestaDeESP();
   }
-  delay(100);
+}
+
+void leerCodigoDeTarjeta() {
+  if (Serial1.available() > 0){
+    if(millis() - lastRead > debounce) {
+      String codigoTarjeta = Serial1.readStringUntil('\n');
+      lastRead = millis();
+      Serial.println(codigoTarjeta);
+      Serial2.println("LEE:"+codigoTarjeta);
+      codigoLeido = codigoTarjeta;
+    } else {
+      while(Serial1.available()){
+        Serial1.read();
+        lastRead = millis();
+      }
+    }
+  }
+}
+
+/******* *******/
+
+/******* Clave Manual *******/  
+boolean procesarClave = false;
+boolean esperandoRespuestaCodigo = false;
+const String claveDeMantenimiento = "123123";
+String claveLeida = "";
+
+void accesoViaClaveDeIngreso() {
+  String claveIngresada = leerClave();
+  if(claveIngresada != claveLeida) {
+    claveLeida = claveIngresada;
+    printEnDisplay(claveLeida, 0, 0);
+  }
+  if(procesarClave){
+    procesarClaveIngresada(claveLeida);
+    procesarClave = false;
+  }
+  if(esperandoRespuestaCodigo) {
+    procesarRespuestaDeESP();
+  }
 }
 
 void procesarClaveIngresada(String clave) {
-    if(clave == "1234") {
-      printDisplay( "Ok!", 0, 0);
+    if(clave == claveDeMantenimiento) {
+      modoMantenimiento = true;
     } else {
-      printDisplay("Clave incorrecta", 0, 0);
+      Serial2.println("COD:"+clave);
+      esperandoRespuestaCodigo = true;
     }
-    delay(1000);
-    limpiarClaveIngresada();
-    procesarClave = false;
-    return;
 }
+
+/******* *******/
+
+/******* ESP *******/
+void procesarRespuestaDeESP() {
+  Serial.println("Procesando");
+  if (Serial2.available() > 0){
+    String lectura = Serial2.readStringUntil('\n');
+    lectura[sizeof(lectura)-1]=0;
+    
+    Serial.println("Recibido: " + lectura);
+    if(lectura=="AUH:1"){
+      printEnDisplay("Abre Puerta", 0, 0);
+      cleanUp();
+    }else if(lectura=="AUH:0"){
+      printEnDisplay("No Autorizado", 0, 0);
+      cleanUp();
+    } else {
+      Serial2.println("RTY:");
+    }
+  }
+}
+
+void cleanUp() {
+  codigoLeido = "";
+  claveLeida = "";
+  limpiarClaveIngresada();
+  esperandoRespuestaCodigo = false;
+}
+
 /******* *******/
 
 /******* Teclado *******/
-const int tecladoFilas[4] = {22, 23, 24, 25};
-const int tecladoColumnas[3] = {26, 27, 28};
+const int tecladoFilas[4] = {41, 43, 45, 47};
+const int tecladoColumnas[3] = {49, 51, 53};
 const char tecladoLayout[4][3] = {{'1','2','3'},{'4','5','6'},{'7','8','9'},{'*','0','#'}};
 String claveIngresada = "";
 
@@ -104,7 +185,7 @@ void setUpDisplay() {
   lcd.blink();
 }
 
-void printDisplay(String text, int atCol, int atRow){
+void printEnDisplay(String text, int atCol, int atRow){
   lcd.clear();
   lcd.setCursor(atCol, atRow);
   lcd.print(text);
