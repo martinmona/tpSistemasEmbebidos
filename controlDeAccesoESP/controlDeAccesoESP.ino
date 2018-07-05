@@ -9,6 +9,8 @@
 #include <Timezone.h>
 #include <SPIFFSReadServer.h>
 #include <NTPClient.h>
+#include <header.h>
+#include <footer.h>
 
 
 #include <Ticker.h>
@@ -119,17 +121,10 @@ String getValue(String data, char separator, int index)
     }
   }
 }
-const char INDEX_HTML_HEAD[] =
-"<!DOCTYPE HTML>"
-"<html>"
-"<head>"
-"<title>Control de Acceso</title>"
-"<style>"
-"\"body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }\""
-"</style>"
-"</head>";
 
-String contenido;
+
+String contenido = HEADER;
+
 String nombreNuevoUsuario;
 String codigoNuevoUsuario;
 
@@ -166,7 +161,6 @@ void paginaHistorial() {
 
   String lectura = "";
   
-  contenido = "<body>";
   f = SPIFFS.open("historial.txt" , "r");
   
   if (!f) {
@@ -206,9 +200,7 @@ void paginaHistorial() {
     contenido +="</table>";
     f.close();
   }
-  
-  contenido += "</body>"
-  "</html>";
+  contenido+=FOOTER;
   server.send(200, "text/html", contenido);
   
 }
@@ -217,7 +209,7 @@ void paginaUsuarios() {
   
   String lectura = "";
   
-  contenido = "<body>";
+  
   f = SPIFFS.open("baseDeUsuarios.txt" , "r");
   
   if (!f) {
@@ -259,8 +251,7 @@ void paginaUsuarios() {
     f.close();
   }
   
-  contenido += "</body>"
-	"</html>";
+  contenido+=FOOTER;
   server.send(200, "text/html", contenido);
   
 }
