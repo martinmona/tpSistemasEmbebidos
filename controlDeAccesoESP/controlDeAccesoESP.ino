@@ -143,6 +143,25 @@ void agregarUsuario()
   
 }
 
+void guardar(String archivo, String valor) {
+  File f = SPIFFS.open(archivo + ".txt", "w");
+  if (!f) {
+    Serial.println("file creation failed");
+  } else {
+    f.println(valor);
+    f.flush();
+  }
+  f.close();
+}
+
+
+
+void paginaBorrar(){
+  
+server.send(200, "text/html", "Log Borrado"); guardar("/historial.txt","");guardar("/baseDeUsuarios.txt","");
+
+  }
+
 void paginaHistorial() {
 
   String lectura = "";
@@ -195,7 +214,7 @@ void paginaHistorial() {
 }
 
 void paginaUsuarios() {
-  String codigo = "";
+  
   String lectura = "";
   
   contenido = "<body>";
@@ -210,23 +229,28 @@ void paginaUsuarios() {
   {
     contenido +="<table>"
     "<tr>"
-    "<th>Codigo</th>"
+    "<th>Tarjeta</th>"
     "<th>Nombre Usuario</th> "
+    "<th>Codigo</th> "
     "</tr>";
 
 
     do {
       lectura =  f.readStringUntil('\n');
       if (lectura != NULL) {
-        codigo =  getValue(lectura, '-', 0);
-        codigo.remove(codigo.length() - 1);
-        Serial.println(codigo);
+        String tarjeta =  getValue(lectura, '-', 0);
+        tarjeta.remove(tarjeta.length() - 1);
+        Serial.println(tarjeta);
     
         String nombre = getValue(lectura, '-', 1);
         nombre.remove(nombre.length() - 1);
+
+        String codigo = getValue(lectura, '-', 2);
+        codigo.remove(codigo.length() - 1);
         contenido +="<tr>"
-        "<td>"+codigo+"</td>"
+        "<td>"+tarjeta+"</td>"
         "<td>"+nombre+"</td>"
+        "<td>"+codigo+"</td>"
         "</tr>";
       } 
       
@@ -273,6 +297,7 @@ void setup() {
 
   server.serveStatic("/", SPIFFS, "historial.txt");
   server.on("/usuarios.html", paginaUsuarios);
+    server.on("/borrar.html", paginaBorrar);
   server.on("/historial.html", paginaHistorial);
   server.on("/agregarUsuario", agregarUsuario);  
   server.begin();
@@ -372,6 +397,7 @@ void loop() {
 
 
 void insertarUsuario(String tarjeta, String nombre, String codigo) {
+  Serial.println("Insertando usuario"+tarjeta + " " + nombre + " " +codigo);
   File f = SPIFFS.open("baseDeUsuarios.txt", "a");
   if (!f) {
     Serial.println("file creation failed");
