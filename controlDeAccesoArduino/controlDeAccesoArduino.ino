@@ -5,6 +5,7 @@ boolean modoMantenimiento = false;
 boolean modoNuevaTarjeta = false;
 boolean puertaAbierta = false;
 const int pinPuerta = 21;
+const String claveDeMantenimiento = "042";
 
 void setup() {
   Serial.begin(9600); //Consola
@@ -19,6 +20,8 @@ void setup() {
 void loop() {
   if(modoNuevaTarjeta) {
     procesarNuevaTarjeta();
+  } else if(modoMantenimiento) {
+    correrModoMantenimiento();
   } else {
     accesoViaTarjeta();
     accesoViaClaveDeIngreso();
@@ -30,8 +33,53 @@ void loop() {
   sonarBuzzer();
 }
 
-/******* Puerta *******/
 const int pinBuzzer = 22;
+int stepp = -1;
+boolean cambioStepp = true;
+boolean buzzerMant = LOW;
+void correrModoMantenimiento() {
+  String mensaje;
+  char digitoIngresado = leerDigito();
+  if(stepp == -1) {
+    mensaje = "Modo Mantenimiento";
+  }else if(stepp == 0) {
+    mensaje = "Acerque tarjeta";
+    String codigoTarjetaMant = leerCodigoDeTarjetaMantenimiento();
+    if(codigoTarjetaMant != "") {
+      printEnDisplay(codigoTarjetaMant, 0, 0); 
+    }
+  } else if(stepp == 1) {
+    mensaje = "*:Sonar Buzzer";
+    if(digitoIngresado == '*') {
+      if(buzzerMant) {
+        buzzerMant = LOW;
+      } else {
+        buzzerMant = HIGH;
+      }
+    }
+    digitalWrite(pinBuzzer, buzzerMant);
+  } else if(stepp == 2) {
+    mensaje = "*:Toggle Puerta";
+    if(digitoIngresado == '*') {
+      Serial.println("Entro");
+      cambioEstadoPuerta();
+    }
+  } else if(stepp == 3) {
+    mensaje = "Fin Modo Mantenimiento";
+    modoMantenimiento = false;
+    cleanUp();
+  }
+  if(cambioStepp) {
+      printEnDisplay(mensaje, 0, 0); 
+      cambioStepp = false;
+  }
+  if(digitoIngresado == '#') {
+    stepp++;
+    cambioStepp = true;
+  }
+}
+
+/******* Puerta *******/
 unsigned long lastReadPuerta = 0;
 const int debouncePuerta = 200;
 unsigned long puertaUltimaVezAbierta = 0;
@@ -40,6 +88,7 @@ boolean sonandoBuzzer = false;
 
 void setUpPuerta() {
   pinMode(pinPuerta, INPUT_PULLUP);
+  pinMode(pinBuzzer, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(pinPuerta), cambioEstadoPuerta, CHANGE);
 }
 
@@ -115,12 +164,27 @@ void leerCodigoDeTarjeta(boolean nuevaTarjeta) {
   }
 }
 
+String leerCodigoDeTarjetaMantenimiento() {
+  if (Serial1.available() > 0){
+    if(millis() - lastRead > debounce) {
+      String codigoTarjeta = Serial1.readStringUntil('\n');
+      lastRead = millis();
+      return codigoTarjeta;
+    } else {
+      while(Serial1.available()){
+        Serial1.read();
+        lastRead = millis();
+      }
+    }
+  }
+  return "";
+}
+
 /******* *******/
 
 /******* Clave Manual *******/  
 boolean procesarClave = false;
 boolean esperandoRespuestaCodigo = false;
-const String claveDeMantenimiento = "123123";
 String claveLeida = "";
 
 void accesoViaClaveDeIngreso() {
@@ -159,8 +223,12 @@ boolean leerMensajeDeNuevaTarjeta() {
     if(lectura.equals("NEW:a")) {     
       printEnDisplay("Acerce su tarjeta", 0, 0);
       Serial.println("Pedido");
+      return true;
+    } else if(!isValidMessage(lectura)) {
+      Serial2.println("RTY:");
+      Serial.println("Pidiendo retry...");
+      return false;
     }
-    return lectura=="NEW:a";
   }
   return false;
 }
@@ -181,6 +249,10 @@ void procesarRespuestaDeESP() {
       Serial2.println("RTY:");
     }
   }
+}
+
+boolean isValidMessage(String message) {
+  return message=="AUH:0" || message=="AUH:1" || message=="NEW:a";
 }
 
 void cleanUp() {
@@ -227,6 +299,20 @@ String leerClave() {
   }
 
   return claveIngresada;
+}
+
+char leerDigito() {  
+  for (int f = 0; f < 4; f++) {
+    fijarFila(f);
+    int columnaLeida = buscarColumnaActiva();
+    if(columnaLeida != -1) {
+      char caracterLeido = tecladoLayout[f][columnaLeida];      
+      desactivarColumna(columnaLeida);
+      return caracterLeido;
+    }
+  }
+
+  return '-';
 }
 
 void limpiarClaveIngresada() {
