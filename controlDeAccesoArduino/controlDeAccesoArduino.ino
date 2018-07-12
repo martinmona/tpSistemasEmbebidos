@@ -1,4 +1,3 @@
-
 #include <LiquidCrystal.h>
 
 boolean modoMantenimiento = false;
@@ -25,15 +24,12 @@ void loop() {
   } else {
     accesoViaTarjeta();
     accesoViaClaveDeIngreso();
-    if(leerMensajeDeNuevaTarjeta()) {
-      Serial.println("Recibido pedido de nueva tarjeta");
-      modoNuevaTarjeta = true;
-    }
+    procesarRespuestaDeESP();
   }
   sonarBuzzer();
 }
 
-const int pinBuzzer = 22;
+const int pinBuzzer = 37;
 int stepp = -1;
 boolean cambioStepp = true;
 boolean buzzerMant = LOW;
@@ -67,6 +63,7 @@ void correrModoMantenimiento() {
   } else if(stepp == 3) {
     mensaje = "Fin Modo Mantenimiento";
     modoMantenimiento = false;
+    stepp = -2;
     cleanUp();
   }
   if(cambioStepp) {
@@ -93,10 +90,11 @@ void setUpPuerta() {
 }
 
 void cambioEstadoPuerta() {
+  Serial.println("cambio estado");
   if(millis() - lastReadPuerta > debouncePuerta) {
     Serial.println("CAMBIO PUERTA");
     if(puertaAbierta) {
-      printEnDisplay("Puerta Cerrada", 0, 0);    
+      printEnDisplay("Puerta Cerrada", 0, 0);
     } else {
       printEnDisplay("Puerta Abierta", 0, 0); 
       puertaUltimaVezAbierta = millis();
@@ -129,16 +127,13 @@ void setUpLectorTarjeta() {
 
 void accesoViaTarjeta() {
   leerCodigoDeTarjeta(false);
-  if(codigoLeido != "") {
-    procesarRespuestaDeESP();
-  }
 }
 
 void procesarNuevaTarjeta() {
   leerCodigoDeTarjeta(true);
   if(codigoLeido != "") {
     modoNuevaTarjeta = false;
-    printEnDisplay("listo!", 0, 0);
+    printEnDisplay("Codigo Enviado", 0, 0);
   }
 }
 
@@ -197,9 +192,6 @@ void accesoViaClaveDeIngreso() {
     procesarClaveIngresada(claveLeida);
     procesarClave = false;
   }
-  if(esperandoRespuestaCodigo) {
-    procesarRespuestaDeESP();
-  }
 }
 
 void procesarClaveIngresada(String clave) {
@@ -214,25 +206,6 @@ void procesarClaveIngresada(String clave) {
 /******* *******/
 
 /******* ESP *******/
-boolean leerMensajeDeNuevaTarjeta() {
-  if (Serial2.available() > 0){
-    String lectura = Serial2.readStringUntil('\n');
-    lectura[sizeof(lectura)-1]=0;
-    
-    Serial.println("Recibido: " + lectura);
-    if(lectura.equals("NEW:a")) {     
-      printEnDisplay("Acerce su tarjeta", 0, 0);
-      Serial.println("Pedido");
-      return true;
-    } else if(!isValidMessage(lectura)) {
-      Serial2.println("RTY:");
-      Serial.println("Pidiendo retry...");
-      return false;
-    }
-  }
-  return false;
-}
-
 void procesarRespuestaDeESP() {
   if (Serial2.available() > 0){
     String lectura = Serial2.readStringUntil('\n');
@@ -240,13 +213,20 @@ void procesarRespuestaDeESP() {
     
     Serial.println("Recibido: " + lectura);
     if(lectura=="AUH:1"){
+      Serial.println("todo ok");
       printEnDisplay("Abre Puerta", 0, 0);
       cleanUp();
     }else if(lectura=="AUH:0"){
       printEnDisplay("No Autorizado", 0, 0);
       cleanUp();
-    } else {
+    } else if(lectura.equals("NEW:a")) {     
+      printEnDisplay("Acerce su tarjeta", 0, 0);
+      Serial.println("Pedido");
+      Serial.println("Recibido pedido de nueva tarjeta");
+      modoNuevaTarjeta = true;
+    }else {
       Serial2.println("RTY:");
+      Serial.println("Pidiendo retry...");
     }
   }
 }
@@ -265,8 +245,8 @@ void cleanUp() {
 /******* *******/
 
 /******* Teclado *******/
-const int tecladoFilas[4] = {41, 43, 45, 47};
-const int tecladoColumnas[3] = {49, 51, 53};
+const int tecladoFilas[4] = {23, 25, 27, 29};
+const int tecladoColumnas[3] = {31, 33, 35};
 const char tecladoLayout[4][3] = {{'1','2','3'},{'4','5','6'},{'7','8','9'},{'*','0','#'}};
 String claveIngresada = "";
 
@@ -288,7 +268,9 @@ String leerClave() {
       char caracterLeido = tecladoLayout[f][columnaLeida];
       
       if(caracterLeido == '#'){
-        procesarClave = true;
+        if(claveIngresada != ""){
+          procesarClave = true;
+        }
       } else {
         claveIngresada += caracterLeido;
         Serial.print(caracterLeido);
