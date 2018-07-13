@@ -5,6 +5,8 @@ boolean modoMantenimiento = false;
 boolean modoNuevaTarjeta = false;
 boolean puertaAbierta = false;
 const int pinPuerta = 21;
+const int ledPin = 53;
+unsigned long ledTurnedOnMillis = 0;
 const String claveDeTest = "042";
 const String claveDeMantenimiento = "043";
 
@@ -16,6 +18,7 @@ void setup() {
   setUpLectorTarjeta();
   setUpTeclado();
   setUpDisplay();
+  pinMode(ledPin, OUTPUT);
 }
 
 void loop() {
@@ -29,6 +32,9 @@ void loop() {
     procesarRespuestaDeESP();
   }
   sonarBuzzer();
+  if(millis() > (ledTurnedOnMillis + 3000)) {
+    digitalWrite(ledPin, LOW);
+  }
 }
 
 const int pinBuzzer = 37;
@@ -47,7 +53,7 @@ void correrModoTest() {
     while(digitoDeEscape == '-') {
       printEnDisplay("*", columna, fila); 
       digitoDeEscape = leerDigito();
-      delay(200);
+      delay(100);
       columna++;
       if(columna == 17) {
         columna = 0;
@@ -167,12 +173,7 @@ void leerCodigoDeTarjeta(boolean nuevaTarjeta) {
         Serial.println("Mando TAR:" +codigoTarjeta);
         Serial2.println("TAR:"+codigoTarjeta);
       } else {
-        if(modoMantenimiento) {
-          printEnDisplay("Leido codigo", 0, 0);
-          printEnDisplay(codigoTarjeta, 0, 1);
-        } else {
-          Serial2.println("LEE:"+codigoTarjeta);
-        }
+        Serial2.println("LEE:"+codigoTarjeta);
       }
       codigoLeido = codigoTarjeta;
     } else {
@@ -216,7 +217,7 @@ void accesoViaClaveDeIngreso() {
   if(procesarClave){
     procesarClaveIngresada(claveLeida);
     procesarClave = false;
-  }
+  }  
 }
 
 void procesarClaveIngresada(String clave) {
@@ -224,14 +225,15 @@ void procesarClaveIngresada(String clave) {
       modoTest = true;
     } else if(clave == claveDeMantenimiento) {
       modoMantenimiento = !modoMantenimiento;
+      if(modoMantenimiento) {
+        printEnDisplay("Modo Mantenimiento", 0, 0);
+      } else {
+        printEnDisplay("Fin Modo Mantenimiento", 0, 0);
+      }
+      cleanUp();
     } else {
       Serial2.println("COD:"+clave);
-      if(modoMantenimiento) {
-        printEnDisplay("Envia al ESP", 0, 0);
-        printEnDisplay(clave, 0, 1);
-      } else {
-        esperandoRespuestaCodigo = true;
-      }
+      esperandoRespuestaCodigo = true;
     }
 }
 
@@ -247,6 +249,10 @@ void procesarRespuestaDeESP() {
     if(lectura=="AUH:1"){
       Serial.println("todo ok");
       printEnDisplay("Abre Puerta", 0, 0);
+      if(!modoMantenimiento) {
+        digitalWrite(ledPin, HIGH);
+        ledTurnedOnMillis = millis();
+      }
       cleanUp();
     }else if(lectura=="AUH:0"){
       printEnDisplay("No Autorizado", 0, 0);
