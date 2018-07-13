@@ -23,8 +23,6 @@ void loop() {
     procesarNuevaTarjeta();
   } else if(modoTest) {
     correrModoTest();
-  } else if(modoMantenimiento) {
-    
   } else {
     accesoViaTarjeta();
     accesoViaClaveDeIngreso();
@@ -169,7 +167,12 @@ void leerCodigoDeTarjeta(boolean nuevaTarjeta) {
         Serial.println("Mando TAR:" +codigoTarjeta);
         Serial2.println("TAR:"+codigoTarjeta);
       } else {
-        Serial2.println("LEE:"+codigoTarjeta);
+        if(modoMantenimiento) {
+          printEnDisplay("Leido codigo", 0, 0);
+          printEnDisplay(codigoTarjeta, 0, 1);
+        } else {
+          Serial2.println("LEE:"+codigoTarjeta);
+        }
       }
       codigoLeido = codigoTarjeta;
     } else {
