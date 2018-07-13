@@ -1,10 +1,12 @@
 #include <LiquidCrystal.h>
 
+boolean modoTest = false;
 boolean modoMantenimiento = false;
 boolean modoNuevaTarjeta = false;
 boolean puertaAbierta = false;
 const int pinPuerta = 21;
-const String claveDeMantenimiento = "042";
+const String claveDeTest = "042";
+const String claveDeMantenimiento = "043";
 
 void setup() {
   Serial.begin(9600); //Consola
@@ -19,8 +21,10 @@ void setup() {
 void loop() {
   if(modoNuevaTarjeta) {
     procesarNuevaTarjeta();
+  } else if(modoTest) {
+    correrModoTest();
   } else if(modoMantenimiento) {
-    correrModoMantenimiento();
+    
   } else {
     accesoViaTarjeta();
     accesoViaClaveDeIngreso();
@@ -32,37 +36,55 @@ void loop() {
 const int pinBuzzer = 37;
 int stepp = -1;
 boolean cambioStepp = true;
-boolean buzzerMant = LOW;
-void correrModoMantenimiento() {
+boolean buzzerTest = LOW;
+void correrModoTest() {
   String mensaje;
   char digitoIngresado = leerDigito();
   if(stepp == -1) {
-    mensaje = "Modo Mantenimiento";
-  }else if(stepp == 0) {
-    mensaje = "Acerque tarjeta";
-    String codigoTarjetaMant = leerCodigoDeTarjetaMantenimiento();
-    if(codigoTarjetaMant != "") {
-      printEnDisplay(codigoTarjetaMant, 0, 0); 
-    }
-  } else if(stepp == 1) {
-    mensaje = "*:Sonar Buzzer";
-    if(digitoIngresado == '*') {
-      if(buzzerMant) {
-        buzzerMant = LOW;
-      } else {
-        buzzerMant = HIGH;
+    mensaje = "Modo Test";
+  } else if(stepp == 0) {
+    char digitoDeEscape = '-';
+    int fila = 0;
+    int columna = 0;
+    while(digitoDeEscape == '-') {
+      printEnDisplay("*", columna, fila); 
+      digitoDeEscape = leerDigito();
+      delay(200);
+      columna++;
+      if(columna == 17) {
+        columna = 0;
+        if(fila == 0)
+          fila = 1;
+        else
+          fila = 0;
       }
     }
-    digitalWrite(pinBuzzer, buzzerMant);
+    digitoIngresado = '#';
+  } else if(stepp == 1) {
+    mensaje = "Acerque tarjeta";
+    String codigoTarjetaTest = leerCodigoDeTarjetaTest();
+    if(codigoTarjetaTest != "") {
+      printEnDisplay(codigoTarjetaTest, 0, 0); 
+    }
   } else if(stepp == 2) {
+    mensaje = "*:Sonar Buzzer";
+    if(digitoIngresado == '*') {
+      if(buzzerTest) {
+        buzzerTest = LOW;
+      } else {
+        buzzerTest = HIGH;
+      }
+    }
+    digitalWrite(pinBuzzer, buzzerTest);
+  } else if(stepp == 3) {
     mensaje = "*:Toggle Puerta";
     if(digitoIngresado == '*') {
       Serial.println("Entro");
       cambioEstadoPuerta();
     }
-  } else if(stepp == 3) {
-    mensaje = "Fin Modo Mantenimiento";
-    modoMantenimiento = false;
+  } else if(stepp == 4) {
+    mensaje = "Fin Modo Test";
+    modoTest = false;
     stepp = -2;
     cleanUp();
   }
@@ -159,7 +181,7 @@ void leerCodigoDeTarjeta(boolean nuevaTarjeta) {
   }
 }
 
-String leerCodigoDeTarjetaMantenimiento() {
+String leerCodigoDeTarjetaTest() {
   if (Serial1.available() > 0){
     if(millis() - lastRead > debounce) {
       String codigoTarjeta = Serial1.readStringUntil('\n');
@@ -195,11 +217,18 @@ void accesoViaClaveDeIngreso() {
 }
 
 void procesarClaveIngresada(String clave) {
-    if(clave == claveDeMantenimiento) {
-      modoMantenimiento = true;
+    if(!modoMantenimiento && (clave == claveDeTest)) {
+      modoTest = true;
+    } else if(clave == claveDeMantenimiento) {
+      modoMantenimiento = !modoMantenimiento;
     } else {
       Serial2.println("COD:"+clave);
-      esperandoRespuestaCodigo = true;
+      if(modoMantenimiento) {
+        printEnDisplay("Envia al ESP", 0, 0);
+        printEnDisplay(clave, 0, 1);
+      } else {
+        esperandoRespuestaCodigo = true;
+      }
     }
 }
 
