@@ -1,3 +1,5 @@
+
+
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
@@ -8,7 +10,9 @@
 #include <TimeLib.h>
 #include <Timezone.h>
 #include <SPIFFSReadServer.h>
+#include <ESP8266mDNS.h>
 #include <NTPClient.h>
+
 
 
 #include <Ticker.h>
@@ -119,67 +123,173 @@ String getValue(String data, char separator, int index)
     }
   }
 }
-const char INDEX_HTML_HEAD[] =
-"<!DOCTYPE HTML>"
-"<html>"
-"<head>"
-"<title>Control de Acceso</title>"
-"<style>"
-"\"body { background-color: #808080; font-family: Arial, Helvetica, Sans-Serif; Color: #000000; }\""
-"</style>"
-"</head>";
 
-String contenido;
+
+
+
 String nombreNuevoUsuario;
 String codigoNuevoUsuario;
 
-void agregarUsuario()
+void agregarUsuario() {
+  String contenido = leer("header.txt");
+  String lectura = "";
+
+  contenido += "<br>"
+               "<br>"
+               "<form action=\"/agregando\" method=\"get\">"
+               "<div class=\"form-group row\">"
+               "<label for=\"inputNombre\" class=\"col-sm-2 col-form-label\">Nombre</label>"
+               "<div class=\"col-sm-10\">"
+               "  <input type=\"text\" class=\"form-control\" id=\"inputNombre\" name=\"Nombre\">"
+               " </div>"
+               "</div>"
+               "<div class=\"form-group row\">"
+               "<label for=\"inputCodigo\" class=\"col-sm-2 col-form-label\">Codigo</label>"
+               "<div class=\"col-sm-10\">"
+               "  <input type=\"text\" class=\"form-control\" id=\"inputCodigo\" name=\"Codigo\">"
+               " </div>"
+               "</div>"
+
+
+               "<div class=\"form-group row\">"
+               "<div class=\"col-sm-10\">"
+               "  <button type=\"submit\" class=\"btn btn-primary\">Agregar Usuario</button>"
+               " </div>"
+               " </div>"
+               "</form>";
+
+
+
+  contenido += leer("footer.txt");
+  server.send(200, "text/html", contenido);
+
+}
+
+void agregando()
 {
   nombreNuevoUsuario = server.arg(0); // ?nombre=nicolas&codigo=123
   codigoNuevoUsuario = server.arg(1);
   swSer.println("NEW:asd");
-  server.send(200,"text/html","<meta http-equiv='refresh' content='5; url=/'> Insertando usuario nuevo...");
-  
-  
+  server.send(200, "text/html", "<meta http-equiv='refresh' content='5; url=/'> Insertando usuario nuevo...");
+
+
 }
 
 void guardar(String archivo, String valor) {
-  File f = SPIFFS.open(archivo + ".txt", "w");
+  File f = SPIFFS.open(archivo, "w");
   if (!f) {
     Serial.println("file creation failed");
   } else {
-    f.println(valor);
+    if (valor != "") {
+      f.print(valor);
+    }
     f.flush();
   }
   f.close();
 }
 
 
+String  leer(String archivo) {
+  f = SPIFFS.open("/" + archivo, "r");
+  if (!f) {
+    Serial.println("no existe el archivo que queres abrir" + archivo);
+    f.close();
+    return "";
+  } else {
+    String temp;
+    while (f.available()) {
+      temp += char(f.read());
+    }
 
-void paginaBorrar(){
-  
-server.send(200, "text/html", "Log Borrado"); guardar("/historial.txt","");guardar("/baseDeUsuarios.txt","");
+    return temp;
+
 
   }
+}
+String  leerSinLinea(String archivo, String codTarjeta) {
+  f = SPIFFS.open(archivo, "r");
+  if (!f) {
+    Serial.println("no existe el archivo que queres abrir" + archivo);
+    f.close();
+    return "";
+  } else {
+
+    String texto = "";
+    while (f.available()) {
+      String temp;
+      char caracter ;
+      do {
+        caracter = char(f.read());
+        temp += caracter;
+      } while (caracter != '\n');
+
+      Serial.println("Lei: " + temp);
+
+      String tarjeta =  getValue(temp, '-', 0);
+      tarjeta.remove(tarjeta.length() - 3);
+
+      Serial.println(tarjeta);
+      Serial.println(codTarjeta);
+
+      if (!tarjeta.equals(codTarjeta)) {
+        texto += temp;
+        Serial.println("IMP " + temp);
+      } else {
+        Serial.println("Son iguales");
+      }
+
+    }
+
+    return texto;
+
+
+  }
+}
+void borrarHistorial() {
+  SPIFFS.remove("historial.txt");
+  guardar("historial.txt", "");
+  server.send(200, "text/html", "<meta http-equiv='refresh' content='5; url=/historial.html'> Borrando historial");
+
+
+}
+void borrarUsuarios() {
+  SPIFFS.remove("baseDeUsuarios.txt");
+  guardar("baseDeUsuarios.txt", "");
+  server.send(200, "text/html", "<meta http-equiv='refresh' content='5; url=/usuarios.html'> Borrando usuarios");
+
+
+}
+void paginaBorrar() {
+  String codigoTarjeta = server.arg(0);
+  String newUsuarios = leerSinLinea("baseDeUsuarios.txt", codigoTarjeta);
+  Serial.print(newUsuarios);
+  guardar("baseDeUsuarios.txt", newUsuarios);
+  server.send(200, "text/html", "<meta http-equiv='refresh' content='5; url=/usuarios.html'> Borrando usuario");
+
+}
 
 void paginaHistorial() {
-
+  String contenido = leer("header.txt");
   String lectura = "";
-  
-  contenido = "<body>";
+
   f = SPIFFS.open("historial.txt" , "r");
-  
+
   if (!f) {
-    Serial.println("no existe el archivo que queres abrir");
+    Serial.println("historial no existe el archivo que queres abrir hisotrial");
     f.close();
-  } 
+  }
   else {
-    contenido +="<table>"
-    "<tr>"
-    "<th>Hora</th>"
-    "<th>Tarjeta</th> "
-    "<th>Nombre</th> "
-    "</tr>";
+    contenido += "<h2>Historial de acceso</h2>"
+                 "<div class=\"table-responsive\">"
+                 "<table class=\"table table-striped\">"
+                 "<thead>"
+                 "<tr>"
+                 "<th>Hora</th>"
+                 "<th>Tarjeta</th> "
+                 "<th>Nombre</th> "
+                 "</tr>"
+                 "</thead>"
+                 "<tbody>";
 
 
     do {
@@ -187,52 +297,57 @@ void paginaHistorial() {
       if (lectura != NULL) {
         String hora =  getValue(lectura, '-', 0);
         hora.remove(hora.length() - 1);
-        Serial.println(hora);
-    
+        //Serial.println(hora);
+
         String tarjeta = getValue(lectura, '-', 1);
         tarjeta.remove(tarjeta.length() - 1);
-        
+
         String nombre = getValue(lectura, '-', 2);
         nombre.remove(nombre.length() - 1);
-        
-        contenido +="<tr>"
-        "<td>"+hora+"</td>"
-        "<td>"+tarjeta+"</td>"
-        "<td>"+nombre+"</td>"
-        "</tr>";
-      } 
-      
+
+        contenido += "<tr>"
+                     "<td>" + hora + "</td>"
+                     "<td>" + tarjeta + "</td>"
+                     "<td>" + nombre + "</td>"
+                     "</tr>";
+      }
+
     } while (lectura != "");
-    contenido +="</table>";
+    contenido += "</tbody>"
+                 "</table>"
+                 "</div>";
     f.close();
   }
-  
-  contenido += "</body>"
-  "</html>";
+  contenido += leer("footer.txt");
   server.send(200, "text/html", contenido);
-  
+
 }
 
 void paginaUsuarios() {
-  
+
   String lectura = "";
-  
-  contenido = "<body>";
+  String contenido = leer("header.txt");
+
   f = SPIFFS.open("baseDeUsuarios.txt" , "r");
-  
+
   if (!f) {
-    Serial.println("no existe el archivo que queres abrir");
-    contenido+=("no existe el archivo que queres abrir");
+    Serial.println("rompe no existe el archivo que queres abrir base usuarios");
+    //contenido+=("no existe el archivo que queres abrir");
     f.close();
-  } 
-  else 
+  }
+  else
   {
-    contenido +="<table>"
-    "<tr>"
-    "<th>Tarjeta</th>"
-    "<th>Nombre Usuario</th> "
-    "<th>Codigo</th> "
-    "</tr>";
+    contenido += "<h2>Usuarios</h2>"
+                 "<div class=\"table-responsive\">"
+                 "<table class=\"table table-striped\">"
+                 "<thead>"
+                 "<tr>"
+                 "<th>Tarjeta</th>"
+                 "<th>Nombre Usuario</th> "
+                 "<th>Codigo</th> "
+                 "</tr>"
+                 "</thead>"
+                 "<tbody>";
 
 
     do {
@@ -241,33 +356,35 @@ void paginaUsuarios() {
         String tarjeta =  getValue(lectura, '-', 0);
         tarjeta.remove(tarjeta.length() - 1);
         Serial.println(tarjeta);
-    
+
         String nombre = getValue(lectura, '-', 1);
         nombre.remove(nombre.length() - 1);
 
         String codigo = getValue(lectura, '-', 2);
         codigo.remove(codigo.length() - 1);
-        contenido +="<tr>"
-        "<td>"+tarjeta+"</td>"
-        "<td>"+nombre+"</td>"
-        "<td>"+codigo+"</td>"
-        "</tr>";
-      } 
-      
+        contenido += "<tr>"
+                     "<td>" + tarjeta + "</td>"
+                     "<td>" + nombre + "</td>"
+                     "<td>" + codigo + "</td>"
+                     "<td><a style='color:black' type=\"button\" href=\"borrar.html?id=" + tarjeta + "\" class=\"btn btn-primary btn-xs\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"feather feather-trash\"><polyline points=\"3 6 5 6 21 6\"></polyline><path d=\"M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2\"></path></svg></a></td>"
+                     "</tr>";
+      }
+
     } while (lectura != "");
-    contenido +="</table>";
+    contenido += "</tbody>"
+                 "</table>"
+                 "</div>";
     f.close();
   }
-  
-  contenido += "</body>"
-	"</html>";
+
+  contenido += leer("footer.txt");
   server.send(200, "text/html", contenido);
-  
+
 }
 
 
 void imprimirHoraSerial() {
-  Serial.println(imprimirHora());
+  //Serial.println(imprimirHora());
 }
 void setup() {
 
@@ -295,13 +412,27 @@ void setup() {
 
   }
 
-  server.serveStatic("/", SPIFFS, "historial.txt");
+
+  if (!MDNS.begin("controlacceso")) {
+    Serial.println("Error setting up MDNS responder!");
+    while (1) {
+      delay(1000);
+    }
+  }
+
+
+  server.serveStatic("/log", SPIFFS, "baseDeUsuarios.txt");
+  server.serveStatic("/log2", SPIFFS, "historial.txt");
+  server.on("/", paginaUsuarios);
   server.on("/usuarios.html", paginaUsuarios);
-    server.on("/borrar.html", paginaBorrar);
+  server.on("/borrar.html", paginaBorrar);
   server.on("/historial.html", paginaHistorial);
-  server.on("/agregarUsuario", agregarUsuario);  
+  server.on("/agregarUsuario", agregarUsuario);
+  server.on("/agregando", agregando);
+  server.on("/borrarUsuarios", borrarUsuarios);
+  server.on("/borrarHistorial", borrarHistorial);
   server.begin();
-  
+
 
   Serial.println("");
   Serial.println("Conectado!");
@@ -314,8 +445,9 @@ void setup() {
 
 
   //insertarUsuario("5361F5CC","sebastian","123456");
-  Serial.println(validarCodigo("123456"));
-  Serial.println(validarTarjeta("AAAAA"));
+  //insertarUsuario("242ASDA2","pepe","988733");
+  //Serial.println(validarCodigo("123456"));
+  //Serial.println(validarTarjeta("AAAAA"));
 }
 
 
@@ -338,11 +470,11 @@ void loop() {
       String tarjeta  = getValue(lectura, ':', 1);
       tarjeta.remove(tarjeta.length() - 2);
       String lee = validarTarjeta(tarjeta);
-      if (lectura !="") {
+      if (lee != "") {
         swSer.println("AUH:1");
         ultimo = "AUH:1";
         Serial.println("Autorizo");
-        insertarHistorial(tarjeta,retornarNombre(lee),imprimirHora());     
+        //  insertarHistorial(tarjeta,retornarNombre(lee),imprimirHora());
       } else {
         swSer.println("AUH:0");
         ultimo = "AUH:0";
@@ -355,12 +487,12 @@ void loop() {
     } else if (codigo == "RTY") {
       swSer.println(ultimo);
 
-    }else if (codigo=="TAR"){
+    } else if (codigo == "TAR") {
       String tarjeta = getValue(lectura, ':', 1);
       Serial.println("Recibi nueva tarjeta");
       Serial.println(tarjeta);
-      insertarUsuario(tarjeta,nombreNuevoUsuario,codigoNuevoUsuario);
-      
+      insertarUsuario(tarjeta, nombreNuevoUsuario, codigoNuevoUsuario);
+
 
 
     } else if (codigo == "COD") {
@@ -368,10 +500,10 @@ void loop() {
       String codigo  = getValue(lectura, ':', 1);
       codigo.remove(codigo.length() - 1);
       String lee2 = validarCodigo(codigo);
-      if (lee2!="") {
+      if (lee2 != "") {
         swSer.println("AUH:1");
         ultimo = "AUH:1";
-        insertarHistorial(retornarTarjeta(lee2),retornarNombre(lee2),imprimirHora());     
+        //insertarHistorial(retornarTarjeta(lee2),retornarNombre(lee2),imprimirHora());
         Serial.println("Autorizo");
       } else {
         swSer.println("AUH:0");
@@ -397,7 +529,7 @@ void loop() {
 
 
 void insertarUsuario(String tarjeta, String nombre, String codigo) {
-  Serial.println("Insertando usuario"+tarjeta + " " + nombre + " " +codigo);
+  Serial.println("Insertando usuario" + tarjeta + " " + nombre + " " + codigo);
   File f = SPIFFS.open("baseDeUsuarios.txt", "a");
   if (!f) {
     Serial.println("file creation failed");
@@ -429,7 +561,7 @@ String validarTarjeta(String tarjeta) {
   f = SPIFFS.open("baseDeUsuarios.txt" , "r");
 
   if (!f) {
-    Serial.println("no existe el archivo que queres abrir");
+    Serial.println("no existe el archivo que queres abrir validar");
     f.close();
   } else {
 
@@ -437,9 +569,9 @@ String validarTarjeta(String tarjeta) {
       lectura =  f.readStringUntil('\n');
       if (lectura != NULL) {
         codigo =  getValue(lectura, '-', 0);
-        codigo.remove(codigo.length() - 1);
-        Serial.println(codigo);
-        if (codigo == tarjeta) {
+        codigo.remove(codigo.length() - 2);
+        Serial.println(codigo.substring(0, 7) + " * " + tarjeta.substring(0, 7));
+        if (codigo.substring(0, 7).equals(tarjeta.substring(0, 7))) {
           f.close();
           String nombre = getValue(lectura, '-', 1);
           nombre.remove(nombre.length() - 1);
@@ -463,7 +595,7 @@ String validarCodigo(String codigoAVerificar) {
   f = SPIFFS.open("baseDeUsuarios.txt" , "r");
 
   if (!f) {
-    Serial.println("no existe el archivo que queres abrir");
+    Serial.println("no existe el archivo que queres abrir usuarios");
     f.close();
   } else {
 
@@ -476,7 +608,7 @@ String validarCodigo(String codigoAVerificar) {
         if (codigo == codigoAVerificar) {
           f.close();
 
-    
+
           insertarHistorial(retornarTarjeta(lectura), retornarNombre(lectura), imprimirHora());
           return lectura;
         }
@@ -490,70 +622,16 @@ String validarCodigo(String codigoAVerificar) {
 }
 
 
-String retornarTarjeta(String lectura){
-          String codigo =  getValue(lectura, '-', 0);
-          codigo.remove(codigo.length() - 1);
-          return codigo;  
+String retornarTarjeta(String lectura) {
+  String codigo =  getValue(lectura, '-', 0);
+  codigo.remove(codigo.length() - 1);
+  return codigo;
 }
 
 
-String retornarNombre(String lectura){
-          String nombre = getValue(lectura, '-', 1);
-          nombre.remove(nombre.length() - 1);
-          return lectura;
+String retornarNombre(String lectura) {
+  String nombre = getValue(lectura, '-', 1);
+  nombre.remove(nombre.length() - 1);
+  return nombre;
 
-  }
-
-/* CODIGO PARA EL ARDUINO COM SERIAL
-
-
-
-
-  //ind1 = readString.indexOf(',');
-  // angle = readString.substring(0, ind1);
-
-
-
-
-
-  unsigned long lastRead = 0;
-  const int debounce = 500;
-  void setup() {
-  Serial.begin(9600);
-  Serial1.begin(9600);
-  Serial2.begin(9600);
-  }
-
-  void loop() {
-  if (Serial1.available() > 0){
-    if(millis() - lastRead > debounce) {
-      String codigo = Serial1.readStringUntil('\n');
-      lastRead = millis();
-      Serial.println(codigo);
-      Serial2.println("LEE:"+codigo);
-    } else {
-      while(Serial1.available()){
-        Serial1.read();
-        lastRead = millis();
-      }
-    }
-  }
-
-
-  //ver de hacerlo mas lindo con  substring y startwith ( con este no me hace falta trimear para comparar
-  if (Serial2.available() > 0){
-   String lectura = Serial2.readStringUntil('\n');
-   lectura[sizeof(lectura)-1]=0;
-
-  if(lectura=="AUH:1"){
-   Serial.println("acceso concedido");
-  }
-      if(lectura=="AUH:0"){
-   Serial.println("acceso negado");
-  }
-
-
-
-  }
-  }
-*/
+}
